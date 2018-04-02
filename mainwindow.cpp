@@ -5,12 +5,34 @@
 #include "vibe-background-sequential.h"
 #include "objfeature.h"
 
+#define SKIN 0
+#define FRAMEINTERV 3
+
+enum{ NOT_SET = 0, IN_PROCESS = 1, SET = 2 ,EXIT =3 };
+cv::VideoCapture capture;
+cv::String inputWindow="inputWindow";
+cv::Mat inputFrame;
+bool roiState=false;
+bool maskState1=false;
+bool maskState2=false;
+
+cv::Rect2i roiRect;
+cv::Rect2i maskRect1;
+cv::Rect2i maskRect2;
+
+int rectState=NOT_SET;
+cv::Point2i startP;
+
+
+
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
 }
 
 MainWindow::~MainWindow()
@@ -18,31 +40,256 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void nothing_on_mouse( int event, int x, int y, int flags, void* para )
+{
+    //nothing to do
+}
+
+void roi_on_mouse( int event, int x, int y, int flags, void* para )
+{
+    // TODO add bad args check
+    using namespace cv;
+
+    switch( event )
+    {
+    case EVENT_LBUTTONDOWN: // set rect or GC_BGD(GC_FGD) labels
+        {
+                rectState = IN_PROCESS;
+                roiRect = cv::Rect( x, y, 1, 1 );
+
+
+        }
+        break;
+    case EVENT_RBUTTONDOWN: // set GC_PR_BGD(GC_PR_FGD) labels
+        {
+
+        }
+        break;
+    case EVENT_LBUTTONUP:
+        if( rectState == IN_PROCESS )
+        {
+            roiRect =cv::Rect( cv::Point(roiRect.x, roiRect.y), cv::Point(x,y) );
+            rectState = SET;
+
+        }
+
+        break;
+    case EVENT_RBUTTONUP:
+
+        {
+            rectState=EXIT;
+        }
+        break;
+    case EVENT_MOUSEMOVE:
+        if( rectState == IN_PROCESS )
+        {
+            roiRect = cv::Rect( cv::Point(roiRect.x, roiRect.y), cv::Point(x,y) );
+
+        }
+
+        break;
+    }
+
+}
+
+void mask1_on_mouse( int event, int x, int y, int flags, void* para )
+{
+    // TODO add bad args check
+    using namespace cv;
+    switch( event )
+    {
+    case EVENT_LBUTTONDOWN: // set rect or GC_BGD(GC_FGD) labels
+        {
+                rectState = IN_PROCESS;
+                maskRect1 = cv::Rect( x, y, 1, 1 );
+
+
+        }
+        break;
+    case EVENT_RBUTTONDOWN: // set GC_PR_BGD(GC_PR_FGD) labels
+        {
+
+        }
+        break;
+    case EVENT_LBUTTONUP:
+        if( rectState == IN_PROCESS )
+        {
+            maskRect1 =cv::Rect( cv::Point(maskRect1.x, maskRect1.y), cv::Point(x,y) );
+            rectState = SET;
+
+        }
+
+        break;
+    case EVENT_RBUTTONUP:
+
+        {
+            rectState=EXIT;
+        }
+        break;
+    case EVENT_MOUSEMOVE:
+        if( rectState == IN_PROCESS )
+        {
+            maskRect1 = cv::Rect( cv::Point(maskRect1.x, maskRect1.y), cv::Point(x,y) );
+
+        }
+
+        break;
+    }
+}
+
+void mask2_on_mouse( int event, int x, int y, int flags, void* para )
+{
+    // TODO add bad args check
+    using namespace cv;
+    switch( event )
+    {
+    case EVENT_LBUTTONDOWN: // set rect or GC_BGD(GC_FGD) labels
+        {
+                rectState = IN_PROCESS;
+                maskRect2 = cv::Rect( x, y, 1, 1 );
+
+
+        }
+        break;
+    case EVENT_RBUTTONDOWN: // set GC_PR_BGD(GC_PR_FGD) labels
+        {
+
+        }
+        break;
+    case EVENT_LBUTTONUP:
+        if( rectState == IN_PROCESS )
+        {
+            maskRect2 =cv::Rect( cv::Point(maskRect2.x, maskRect2.y), cv::Point(x,y) );
+            rectState = SET;
+
+        }
+
+        break;
+    case EVENT_RBUTTONUP:
+
+        {
+            rectState=EXIT;
+        }
+        break;
+    case EVENT_MOUSEMOVE:
+        if( rectState == IN_PROCESS )
+        {
+            maskRect2 = cv::Rect( cv::Point(maskRect2.x, maskRect2.y), cv::Point(x,y) );
+
+        }
+
+        break;
+    }
+}
+
 void MainWindow::on_lkvb2_pushButton_clicked()
 {
     using namespace std;
     using namespace cv;
-    int left=60;
-    int top=90;
-    int width=520;
-    int height=110;
+
+    if(!capture.isOpened())
+    {
+        ui->warning_lineEdit->setText("Please open a video file first");
+        return ;
+    }
+    if (!capture.read(inputFrame)) {
+        ui->warning_lineEdit->setText("Video read error");
+        capture.release();
+
+        cv::destroyAllWindows();
+        return;
+    }
+    int left;  //60;
+    int top;     //90;
+    int width;   //350;
+    int height;    //85;
+
+    if(roiState)
+    {
+        left=roiRect.x;  //60;
+        top=roiRect.y;     //90;
+        width=roiRect.width;   //350;
+        height=roiRect.height;    //85;
+    }
+    else
+    {
+        left=0; top=0;
+        width=inputFrame.cols;
+        height=inputFrame.rows;
+    }
     int CENTERx=width/2;
     int CENTERy=height/2;
     int outputCenterx=left+width/2;
     int outputCentery=top+height/2;
-    Rect processRange(left,top,width,height);
+    Rect2i processRange(left,top,width,height);
 
-    bool haveScreenRange=true;
-    int screenLeft=190-left;
-    int screenTop=130-top;
-    int screenWidth=125;
-    int screenHeight=90;
-    Rect screenRange(screenLeft,screenTop,screenWidth,screenHeight);
+    bool haveScreenRange=false;
+    int screenLeft;  //215-left
+    int screenTop;  //130-top;
+    int screenWidth;   //150;
+    int screenHeight;   //75;
+    vector<Rect2i> screenRange;
 
+    int insideScreenRange=false;
+    int isOverlap=false;
+    int overlapScreenID=-1;
+    int screenTime=0;
 
+    if(maskState1)
+    {
+        screenLeft=maskRect1.x-left;
+        if(screenLeft<0)
+        {
+            screenLeft=0;
+            maskRect1.width=maskRect1.x+maskRect1.width-left;
+        }
+        screenTop=maskRect1.y-top;  //130-top;
+        if(screenTop<0)
+        {
+            screenTop=0;
+            maskRect1.height=maskRect1.y+maskRect1.height-top;
+        }
+        screenWidth=maskRect1.width;   //150;
+        if(screenWidth>width)
+            screenWidth=width;
+        screenHeight=maskRect1.height;   //75;
+        if(screenHeight>height)
+            screenHeight=height;
+        Rect2i ts_rect=cv::Rect(screenLeft,screenTop,screenWidth,screenHeight);
+        screenRange.push_back(ts_rect);
+
+    }
+    if(maskState2)
+    {
+        screenLeft=maskRect2.x-left;
+        if(screenLeft<0)
+        {
+            screenLeft=0;
+            maskRect2.width=maskRect2.x+maskRect2.width-left;
+        }
+        screenTop=maskRect2.y-top;  //130-top;
+        if(screenTop<0)
+        {
+            screenTop=0;
+            maskRect2.height=maskRect2.y+maskRect2.height-top;
+        }
+        screenWidth=maskRect2.width;   //150;
+        if(screenWidth>width)
+            screenWidth=width;
+        screenHeight=maskRect2.height;   //75;
+        if(screenHeight>height)
+            screenHeight=height;
+        Rect2i ts_rect=cv::Rect(screenLeft,screenTop,screenWidth,screenHeight);
+        screenRange.push_back(ts_rect);
+
+    }
+    int Num_shield=screenRange.size();
+    if(Num_shield>0)
+         haveScreenRange=true;
     static int frameNumber = 1; /* The current frame number */
-    Mat inputFrame;
+  //  Mat inputFrame;
     Mat colorFrame;
+    Mat faceFrame;
     Mat frame;                  /* Current gray frame. */
     Mat frame_prev; // previous gray-level image
     Mat segmentationMap;        /* Will contain the segmentation map. This is the binary output map. */
@@ -117,7 +364,8 @@ void MainWindow::on_lkvb2_pushButton_clicked()
     // output parameters
     Rect outputRect(outputCenterx-20,outputCentery-30,40,60);
     int  outputTimeout=0;
-    bool inScreenRange=false;
+    int outputObjNum=0;
+
 
     int imin=40;
     int imax=230;
@@ -131,8 +379,8 @@ void MainWindow::on_lkvb2_pushButton_clicked()
         else if(i>imax)
             lut.at<uchar>(i)=255;
         else
-                       lut.at<uchar>(i)=static_cast<uchar>(
-                     255.0*(i-imin)/(imax-imin)+0.5);
+            lut.at<uchar>(i)=static_cast<uchar>(
+                        255.0*(i-imin)/(imax-imin)+0.5);
 
     }
 
@@ -169,15 +417,19 @@ void MainWindow::on_lkvb2_pushButton_clicked()
         return ;
     }
     namedWindow("Frame");
-    namedWindow("Gray");
+   // namedWindow("Gray");
     namedWindow("ShowRect");
     namedWindow("Segmentation by ViBe");
     namedWindow("Afterdilate");
     namedWindow("Tracking");
+#if SKIN
+    namedWindow("faceFrame");
+#endif
     /* Model for ViBe. */
     vibeModel_Sequential_t *model = NULL; /* Model used by ViBe. */
 
     frameNumber=1;
+    int frameInterV=0;
 
     while ((char)keyboard != 'q' && (char)keyboard != 27) {
       /* Read the current frame. */
@@ -194,16 +446,17 @@ void MainWindow::on_lkvb2_pushButton_clicked()
        Mat roiframe= inputFrame(processRange);
        roiframe.copyTo(colorFrame);
        roiframe.copyTo(showrectMap);
+   //    roiframe.copyTo(faceFrame);
       //show the current frame
    //   imshow("Frame", inputFrame);
       //convert to gray
       cvtColor(colorFrame, frame, CV_BGR2GRAY);
 
-      imshow("Gray",frame);
+   //   imshow("Gray",frame);
 
-       cv::LUT(frame,lut,afterLut);
+ //      cv::LUT(frame,lut,afterLut);
 
-       imshow("afterLut",afterLut);
+  //     imshow("afterLut",afterLut);
 
     //   afterLut.copyTo(frame);
     // Applying ViBe.
@@ -215,7 +468,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 
       /* ViBe: Segmentation and updating. */
       //give some time for background building
-      if (frameNumber < 20){
+      if (frameNumber < 10){
         libvibeModel_Sequential_Segmentation_8u_C1R(model, frame.data, segmentationMap.data);
         libvibeModel_Sequential_Update_8u_C1R(model, frame.data, segmentationMap.data);
         ++frameNumber;
@@ -223,6 +476,16 @@ void MainWindow::on_lkvb2_pushButton_clicked()
       }
       if(frameNumber>10000000)
           frameNumber=100;
+
+      if(frameInterV==FRAMEINTERV)
+          frameInterV=0;
+      if(frameInterV>0)
+      {
+          frameNumber++;
+          frameInterV++;
+          continue;
+      }
+      frameInterV++;
       ++frameNumber;
 
       // for first image of the sequence
@@ -248,7 +511,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 // **Erode,Dilate and CCL..................
       cv::erode(segmentationMap,segmentationMap,cv::Mat());
       cv::dilate(segmentationMap,segmentationMap,element,Point(-1,-1),7);
-      cv::erode(segmentationMap,segmentationMap,cv::Mat(),Point(-1,-1),6);
+      cv::erode(segmentationMap,segmentationMap,cv::Mat(),Point(-1,-1),10);
 
       //Extract the contours so that
       cv::findContours( segmentationMap, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
@@ -410,58 +673,78 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           for(k=0; k<rectsNum; k++)
           {
               if(isMatchedRectLK(objFeature[currentID].lkRect,rects[k]))
-                {
-                    objFeature[currentID].rectIndex=k;
-                    // set after process join & split condition
-/*aaa*/              //  objFeature[currentID].rect=rects[k];
-                    objFeature[currentID].noMatch=-1;
-//                        if(vbNum<2)
-//                            matched[k]=1;
-                    matchedNum++;
-                    haveMatchedRect=true;
-                    cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<k;
-                    cout<<"rect x width  "<<rects[k].x<<" "<<rects[k].width<<endl;
-                    break;
-                }
+              {
+                  objFeature[currentID].rectIndex=k;
+                  // set after process join & split condition
+                  /*aaa*/              //  objFeature[currentID].rect=rects[k];
+                  objFeature[currentID].noMatch=-1;
+                  //                        if(vbNum<2)
+                  //                            matched[k]=1;
+                  matchedNum++;
+                  haveMatchedRect=true;
+                  cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<k;
+                  cout<<"rect x width  "<<rects[k].x<<" "<<rects[k].width<<endl;
+                  break;
+              }
           }
-/*aaa*/      if(!haveMatchedRect)
+/*aaa*/   if(!haveMatchedRect)
           {
               for(k=0; k<rectsNum; k++)
               {
                   if(isMatchedRect(objFeature[currentID].rect,rects[k]))
-                    {
-                        objFeature[currentID].rectIndex=k;
-                        // set after process join & split condition
-  /*aaa*/              //  objFeature[currentID].rect=rects[k];
-                        objFeature[currentID].noMatch=-1;
-//                        if(vbNum<2)
-//                            matched[k]=1;
-                        matchedNum++;
-                        haveMatchedRect=true;
-                        cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<k;
-                        cout<<"rect x width  "<<rects[k].x<<" "<<rects[k].width<<endl;
-                        break;
-                    }
+                  {
+                      objFeature[currentID].rectIndex=k;
+                      // set after process join & split condition
+                      /*aaa*/              //  objFeature[currentID].rect=rects[k];
+                      objFeature[currentID].noMatch=-1;
+                      //                        if(vbNum<2)
+                      //                            matched[k]=1;
+                      matchedNum++;
+                      haveMatchedRect=true;
+                      cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<k;
+                      cout<<"rect x width  "<<rects[k].x<<" "<<rects[k].width<<endl;
+                      break;
+                  }
               }
           }
           if(!haveMatchedRect){
-// 11-27                 objNum-=1;
-//                  if(objNum<0)
-//                      objNum=0;
-//                  object_Feature_Init(objFeature[currentID]);
-//                  cout<<"current obj removed rect= "<<objFeature[currentID].rectIndex<<endl;
-//                  currentID=-1;
+              // 11-27                 objNum-=1;
+              //                  if(objNum<0)
+              //                      objNum=0;
+              //                  object_Feature_Init(objFeature[currentID]);
+              //                  cout<<"current obj removed rect= "<<objFeature[currentID].rectIndex<<endl;
+              //                  currentID=-1;
               objFeature[currentID].rectIndex=NOMATCHINDEX;
               jointedIndex=-1;
               objJointed=0;
               objSplited=0;
-/*aaa*/         if(objFeature[currentID].noMatch==-1)
-                  objFeature[currentID].noMatch=NOMATCHTIMES;
+/*aaa*/       if(objFeature[currentID].noMatch==-1)
+              objFeature[currentID].noMatch=NOMATCHTIMES;
 
           }
       }    //end of match currentobj
 
-      //2. if there are obj jointed or splited
+      // 1.1  非joined状态，可以匹配两个矩形，进入confirm again state
+      index=0;
+
+      if(currentID>-1 && objJointed==0)
+      {
+
+          // currentObj to match as many rect as possible
+          // here obj[currentID].rect remain as last frame
+          for(k=0; k<rectsNum; k++){
+              if(isMatchedRect(objFeature[currentID].rect,rects[k]))
+                  index++;
+          }
+          // currentObj can match more than one vbrect
+          if(index>1)
+          {
+             objFeature[currentID].confirmAgain=1;
+          }
+      }  //end of if(currentID>-1
+
+
+      //2. if there are obj joined or splited
       index=0;
 
       if(currentID>-1 && objJointed>0)
@@ -470,8 +753,8 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           // currentObj to match as many rect as possible
           // here obj[currentID].rect remain as last frame
           for(k=0; k<rectsNum; k++){
-             if(isMatchedRect(objFeature[currentID].rect,rects[k]))
-                          index++;
+              if(isMatchedRect(objFeature[currentID].rect,rects[k]))
+                  index++;
           }
           //if obj[jointedIndex] can match two rects
           // obj splited,do not match currentobj rect again
@@ -485,7 +768,8 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                           && matched[k]==0)
                   {
                       objFeature[jointedIndex].rectIndex=k;
-/*aaa*/                  objFeature[jointedIndex].rect=rects[k];
+                      /*aaa*/
+                      objFeature[jointedIndex].rect=rects[k];
                       //mark this rect,not match again
                       matched[k]=1;
                       matchedNum++;
@@ -500,8 +784,9 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           else if(index==1)
           {
               objJointed+=1;
-/*aaa*/         objFeature[jointedIndex].rectIndex=objFeature[currentID].rectIndex;
-/*aaa*/         objFeature[jointedIndex].rect=rects[objFeature[currentID].rectIndex];
+              /*aaa*/
+              objFeature[jointedIndex].rectIndex=objFeature[currentID].rectIndex;
+              objFeature[jointedIndex].rect=rects[objFeature[currentID].rectIndex];
               if(objJointed==200)
               {
                   if(objFeature[jointedIndex].trustedValue>=TRUSTTHRES)
@@ -534,7 +819,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
       //3. if splited==1, choose a correct rect as currentobj rect
 /*aaa*/
       if(currentID>-1 && objFeature[currentID].noMatch==-1 && objSplited==1)
-      {
+       {
           //a. when splited, do not choose a not moved rect as currentobj rect
           splitChooseOK=false;
           rectemp=objFeature[currentID].rect;
@@ -570,11 +855,11 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           {
               matchNoMove1=false;
               if(isMatchedNotMove(objFeature[currentID].rect,objFeature[currentID].initialRect))
-                      matchNoMove1=true;
+                  matchNoMove1=true;
 
               matchNoMove2=false;
               if(isMatchedNotMove(objFeature[jointedIndex].rect,objFeature[jointedIndex].initialRect))
-                      matchNoMove2=true;
+                  matchNoMove2=true;
               // another obj.rect match to it's initial
               if(matchNoMove2)
                   splitChooseOK=true;
@@ -718,21 +1003,40 @@ void MainWindow::on_lkvb2_pushButton_clicked()
       //9.detect if the obj is overlaped with a screenrange
       for(k=0; k<MAXOBJNUM; k++)
       {
-
           if(objFeature[k].rectIndex>-1 && haveScreenRange)
           {
-              if(isMatchedRect(objFeature[k].rect,screenRange))
-                  objFeature[k].screenIndex=0;
-              else
-                  objFeature[k].screenIndex=-1;
+              Rect2i rect_temp=objFeature[k].rect;
+              for (i = 0; i < Num_shield; i++)
+              {
+                  Rect2i screen_temp=screenRange[i];
+                  if (screen_temp.x - SHIELDMARGIN> (rect_temp.x + rect_temp.width)
+                          || (screen_temp.x+screen_temp.width + SHIELDMARGIN) < rect_temp.x
+                          || screen_temp.y - SHIELDMARGIN> rect_temp.y+rect_temp.height
+                          || screen_temp.y+screen_temp.height + SHIELDMARGIN < rect_temp.y)		//	应该外扩	//
+                  {
+                      objFeature[k].overlapScreen = -1;												//不相交		//
+                  }
+                  else
+                  {
+                      objFeature[k].overlapScreen = i;												//相交，具体序号//
+                      if (IsInsideScreen(screenRange[i], objFeature[k].rect))
+                      {
+                          objFeature[k].inScreen = true;													//包含，具体序号//
+                      }
+                      else
+                      {
+                          objFeature[k].inScreen = false;												//不包含		//
+                      }
+                      break;
+                  }
+              }
           }
-
       }
       cout<<" vb number="<<vbNum<<" joinedIndex="<<jointedIndex<<endl;
 
 
 
-// ** LK process..................................
+// ** 七、LK process..................................
       //begin to do lk tracking
       for(k=0; k<MAXOBJNUM; k++)
       {
@@ -915,9 +1219,15 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   objFeature[k].points[1].resize(pointNum);
                   objFeature[k].lkMatchedNum=pointNum;
                   objFeature[k].trackedPointNum=pointNum;
+//modify 3.28   move index of MovX MovY
+                  objFeature[k].mvIndex+=1;
+                  if(objFeature[k].mvIndex==MOVENUM)
+                      objFeature[k].mvIndex=0;
+
                   index=objFeature[k].mvIndex;
 
-                  if(pointNum>=LEASTLKPOINTS/2)
+
+                  if(pointNum>=LEASTMOVEPOINTS)
                   {
                       // record movement
                       if(moveNum>0)
@@ -931,9 +1241,9 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                           objFeature[k].objMvY[index]=0;
                       }
                       //record lkrect
-                      lkLeft=640;
+                      lkLeft=width;
                       lkRight=0;
-                      lkTop=360;
+                      lkTop=height;
                       lkBottom=0;
 
                       for(i= 0; i < objFeature[k].points[1].size(); i++ )
@@ -960,7 +1270,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                       if(moveNum>0)
                       {
                           meanMove=(fabs(sumXmove)+fabs(sumYmove))/moveNum;
-                          meanMove=meanMove/3;
+                          meanMove=meanMove/4;
                           pointNum=0;
                           sumXmove=0;
                           sumYmove=0;
@@ -993,17 +1303,13 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 
                       } // end of moveNum>0 calc again
 
-                  }  //end of pointNum>10
+                  }  //end of pointNum>=LEASTLKPOINTS/2
                  //pointNum<=10 //lkrect same as last frame
                   else
                   {
                       objFeature[k].objMvX[index]=0;
                       objFeature[k].objMvY[index]=0;
                   }
-
-                  objFeature[k].mvIndex++;
-                  if(objFeature[k].mvIndex==MOVENUM)
-                      objFeature[k].mvIndex=0;
 
                   sumXmove=0;
                   sumYmove=0;
@@ -1018,7 +1324,9 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   cv::rectangle(colorFrame, objFeature[k].lkRect,
                                 cv::Scalar(255, 255, 255), 1);
 
+                  cout<<"--k= "<<k;
                   cout<<"   point number="<<pointNum<<"  moveX="<<objFeature[k].moveX;
+                  cout<<"  moveY="<<objFeature[k].moveY;
                   cout<<"   MvX="<<objFeature[k].objMvX[objFeature[k].mvIndex];
                   cout<<"  MvY="<<objFeature[k].objMvY[objFeature[k].mvIndex]<<endl;
 
@@ -1051,7 +1359,10 @@ void MainWindow::on_lkvb2_pushButton_clicked()
              //record lk detect counts.
              objFeature[k].trustCount++;
              //lk tracking,obj moved
-             if(fabs(objFeature[k].objMvX[objFeature[k].mvIndex])>LEASTMOVE)
+             index=objFeature[k].mvIndex;
+//modify 3.28  x,y two dimentional movement, maybe lower value of LEASTMOVE
+             if((fabs(objFeature[k].objMvX[index])
+                     +fabs(objFeature[k].objMvY[index]))>=LEASTMOVE)
              {
                  if(objFeature[k].trustedValue<TRUSTTHRES){  //待定目标
                      objFeature[k].trustedValue+=1;
@@ -1077,7 +1388,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                      objFeature[k].trustedValue-=1;
                      if(objFeature[k].trustedValue==-1)
                      {
-                         if(objFeature[k].trustCount<20)
+                         if(objFeature[k].trustCount<MAXTRUSTTIMES)
                              objFeature[k].trustedValue=1;
                          else
                          {
@@ -1096,12 +1407,13 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                      objFeature[k].notmoveCount+=1;
 
                  }
-             }    //end of tracking not ok
+             }    //end of tracking obj not move
          }  //end of second if
        } //end of firs if
      }  //end of for(k=0 treat lk status of obj
 
-     //4. treat condition that jointed rect split
+// ** 八、策略：process after vb and lk......................
+     //1. treat condition that jointed rect split
      if(vbNum>1 && currentID>-1 && objSplited==1 && !splitChooseOK)
      {
         // if(objFeature[currentID].rectIndex
@@ -1130,9 +1442,9 @@ void MainWindow::on_lkvb2_pushButton_clicked()
       //   }
      }
 
-//策略：process after vb and lk......................
 
-     //1.treat status that current obj has not match a vb-rect
+
+     //2.treat status that current obj has not match a vb-rect
       if(currentID > -1 && objFeature[currentID].noMatch > -1)
       {
           if(objFeature[currentID].trackedPointNum>0)
@@ -1148,6 +1460,10 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   objJointed=0;
                   objSplited=0;
                   jointedIndex=-1;
+                  overlapScreenID=-1;
+                  isOverlap=0;
+                  insideScreenRange=0;
+                  screenTime=0;
               }
           }
           else
@@ -1160,10 +1476,14 @@ void MainWindow::on_lkvb2_pushButton_clicked()
               objJointed=0;
               objSplited=0;
               jointedIndex=-1;
+              overlapScreenID=-1;
+              isOverlap=0;
+              insideScreenRange=0;
+              screenTime=0;
           }
       }
 
-      // 2.deadlocked(trustedValue==-1) obj, if move then do lk detect again
+      // 3.deadlocked(trustedValue==-1) obj, if move then do lk detect again
        for(k=0; k<MAXOBJNUM; k++)
        {
            if(objFeature[k].rectIndex>-1 && objFeature[k].trustedValue==-1)
@@ -1180,7 +1500,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 
        }
 
-       // 3.tracking obj(trustedValue>=TRUSTTHRES), if not move,do not track again
+       // 4.tracking obj(trustedValue>=TRUSTTHRES), if not move,do confirm again
        for(k=0; k<MAXOBJNUM; k++)
        {
            if(objFeature[k].rectIndex>-1 && objFeature[k].trustedValue>=TRUSTTHRES
@@ -1197,29 +1517,81 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                        break;
                    }
                }
-               if(objFeature[k].trustCount>100)
-               {
-                   if((objFeature[k].trustedValue-objFeature[k].notmoveCount)<-600)
+//modified 3.30
+               if(objFeature[k].notmoveCount>NOTMOVECOUNT)
                        matchNoMove2=true;
-               }
+
                if(matchNoMove1 && matchNoMove2)
                {
-                   objFeature[k].trustedValue=1;
-                   objFeature[k].notmoveCount=0;
-                   objFeature[k].trustCount=0;
-                   objFeature[k].trackedPointNum=0;
-                   objFeature[k].initialRect=objFeature[k].rect;
-                   objFeature[k].lkRect=objFeature[k].rect;
-                   if(objFeature[k].isCurrentObj)
+//modify 3.30  if a currentObj, enter confirmagain state
+                   if(k==currentID)
+                       objFeature[currentID].confirmAgain=1;
+                   else
                    {
-                       objFeature[k].isCurrentObj=false;
-                       currentID=-1;
+                       objFeature[k].trustedValue=1;
+                       objFeature[k].notmoveCount=0;
+                       objFeature[k].trustCount=0;
+                       objFeature[k].trackedPointNum=0;
+                       objFeature[k].initialRect=objFeature[k].rect;
+                       objFeature[k].lkRect=objFeature[k].rect;
+
                    }
                }
            }
 
        }
 
+     //增加一个当前目标再确定过程 confirmedAgain
+     //三种情况会进入再确定过程
+     // 1.在屏蔽区内，倒计数到时； 2.noMoveCount>阈值； 3.无joined状态分离两个矩形
+     if(currentID>-1)
+     {
+         if(objFeature[currentID].confirmAgain==1)
+         {
+             objFeature[currentID].confirmCount++;
+             index=objFeature[currentID].mvIndex;
+             if((fabs(objFeature[currentID].objMvX[index])
+                 +fabs(objFeature[currentID].objMvY[index]))>=LEASTMOVE)
+             {
+                 objFeature[currentID].confirmValue+=1;
+                 if(objFeature[currentID].confirmValue==TRUSTTHRES) //再确认成功
+                 {
+                     objFeature[currentID].confirmAgain=0;
+                     objFeature[currentID].confirmCount=0;
+                     objFeature[currentID].confirmValue=-1;
+                     cout<<"a currentobj comfirm again success index="<<currentID<<endl;
+                 }
+
+             }  //end of tracking obj moved
+             else
+             {    //lk tracking,obj not moved
+
+                     objFeature[currentID].confirmValue-=1;
+                     if(objFeature[currentID].confirmValue==-1)
+                     {
+                         if(objFeature[currentID].confirmCount<MAXTRUSTTIMES)
+                             objFeature[currentID].confirmValue=1;
+                         else   //confirm not ok
+                         {
+                             object_Feature_Init(objFeature[currentID]);
+                             objNum--;
+
+                             currentID=-1;
+                             objJointed=0;
+                             objSplited=0;
+                             jointedIndex=-1;
+                             overlapScreenID=-1;
+                             isOverlap=0;
+                             insideScreenRange=0;
+                             screenTime=0;
+
+
+                         }
+                     }
+
+             }    //end of tracking obj not move
+         }
+     }
 
     //recalclate objNum
       objNum=0;
@@ -1228,75 +1600,199 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           if(objFeature[k].rectIndex>-1 && objFeature[k].trustedValue >=TRUSTTHRES)
               objNum++;
       }
-     //选取currentobj 输出x,y and objNum
-     disToCenter= CENTERx;
-     index= -1;
-     cout<<"result output ";
-     if(objNum>0){              //there is at least one obj
-         //there is no current obj, choose one
-         if(currentID<0){
-             for(k=0; k<MAXOBJNUM; k++){
-                 if(objFeature[k].trustedValue>=TRUSTTHRES
-                         && objFeature[k].screenIndex==-1)   //is a confirmed obj,not overlap screen
-                 {
-                     centerPoint.x=objFeature[k].lkRect.x+objFeature[k].lkRect.width/2;
-                     i=abs(centerPoint.x-CENTERx);
-                     if(i < disToCenter)
-                     {   //obj near to center
-                         disToCenter=i;
-                         index=k;
-                     }
-                 }
-             }
-             if(index>-1)
-             {
-                 currentID=index;
-                 objFeature[index].isCurrentObj=true;
-             }
-         }  //end if currentID<0
-         //if there are at least one ScreenRange
-         if(currentID >-1 && haveScreenRange)
-         {
-             //check if currentObj in screenrange
-             if(isMatchedRect(screenRange,objFeature[currentID].rect))
-             {
-                 inScreenRange=true;
-                 // there are other obj, set it to currentobj
-                 if(objNum>1){
-                     index=-1;
-                     disToCenter=CENTERx;
-                     //there have some confirmed obj not in screenrange
-                     for(k=0; k<MAXOBJNUM; k++){
-                         if(k!=currentID
-                               && objFeature[k].trustedValue>=TRUSTTHRES
-                               && objFeature[k].screenIndex==-1)
-                         {
-                             centerPoint.x=objFeature[k].lkRect.x+objFeature[k].lkRect.width/2;
-                             i=abs(centerPoint.x-CENTERx);
-                             if(i < disToCenter){   //obj near to center
-                             disToCenter=i;
-                             index=k;
-                            }
-                         }
-                     }
-                     if(index>-1){
-                         objFeature[currentID].isCurrentObj=false;
-                         currentID=index;
-                         objFeature[currentID].isCurrentObj=true;
-                         inScreenRange=false;
-                     }
+      outputObjNum = objNum;
 
-                 } //end of have other obj not in screen
-              } //end of if current obj in screen
-            // current obj not in screen
-             else
-             {
-                 inScreenRange=false;
-             }
-         }  //end of have screenrange
-     }   //end of have obj
+      //there is at least one obj
+      if(objNum>0)
+      {
+          // 5. 选取currentobj 输出x,y and objNum
 
-     //
+          disToCenter= CENTERx;
+          index= -1;
+
+          //1). there is no current obj, choose one not overlap with a screenRange
+
+          if(currentID<0)
+          {
+              for(k=0; k<MAXOBJNUM; k++)
+              {
+                  if(objFeature[k].trustedValue>=TRUSTTHRES
+                          && objFeature[k].overlapScreen==-1)   //is a confirmed obj,not overlap screen
+                  {
+                      centerPoint.x=objFeature[k].lkRect.x+objFeature[k].lkRect.width/2;
+                      i=abs(centerPoint.x-CENTERx);
+                      if(i < disToCenter)
+                      {   //obj near to center
+                          disToCenter=i;
+                          index=k;
+                      }
+                  }
+              }
+              if(index>-1)
+              {
+                  currentID=index;
+                  objFeature[currentID].isCurrentObj=true;
+                  objFeature[currentID].Prestate_isCurrentObj=false;
+              }
+          }  //end if currentID<0
+          //2) if not a obj witch is not overlap with scrrenRange
+          if(currentID<0)
+          {
+              for(k=0; k<MAXOBJNUM; k++)
+              {
+                  if(objFeature[k].trustedValue>=TRUSTTHRES)   //is a confirmed obj
+                  {
+                      if(!objFeature[k].inScreen)
+                      {
+                          currentID=k;
+                          objFeature[currentID].isCurrentObj=true;
+                          objFeature[currentID].Prestate_isCurrentObj=false;
+                          break;
+                      }
+                  }
+              }
+          }  //end if currentID<0, maybe choose a obj overlaped with screenRange
+
+          //3) if there has not a obj witch is not overlap with scrrenRange
+          //     obj must inside screenRange, choose this
+          if(currentID<0)
+          {
+              for(k=0; k<MAXOBJNUM; k++)
+              {
+                  if(objFeature[k].trustedValue>=TRUSTTHRES)   //is a confirmed obj
+                  {
+                      //+条件，宽，高，落地等
+                      currentID=k;
+                      objFeature[currentID].isCurrentObj=true;
+                      objFeature[currentID].Prestate_isCurrentObj=false;
+                      break;
+
+                  }
+              }
+          }  //end if currentID<0, maybe choose a obj overlaped with screenRange
+
+
+
+          //6. 屏蔽区处理 if there are at least one ScreenRange
+          if(currentID >-1 && haveScreenRange)
+          {
+              //01当前跟踪目标与屏蔽区关系	开始标记
+              insideScreenRange=0;
+              if(objFeature[currentID].overlapScreen==-1)
+              {
+                  isOverlap = 0;					//不相交//
+                  insideScreenRange = 0;		    //不包含//
+                  screenTime = 0;					//目标和屏蔽区不相交，直接清零//
+              }
+              else
+              {
+                  isOverlap = 1;								//相交
+                  overlapScreenID = objFeature[currentID].overlapScreen;//记录跟踪目标相交的屏蔽区序号	//
+                  if (!objFeature[currentID].inScreen)
+                  {
+                      insideScreenRange = 0;				//不包含	//
+                  }
+                  else
+                  {
+                      insideScreenRange = 1;			 //包含		//
+                      if (screenTime == 0)
+                          screenTime = SCREENTIME;
+
+                  }
+              }/* ========= 标记结束 */
+
+
+              /* 02 相交而不在内 设screenTime	------------- */
+              if (isOverlap==1 && insideScreenRange==0)
+              {
+                  if (vbNum == 1 && objFeature[currentID].noMatch == -1)
+                      //目标仅一个，只是相交，标记600，不做倒计时
+                      screenTime = 600;
+                  else													// 多个目标	//
+                  {
+                      index = -1;
+                      for (k = 0; k < MAXOBJNUM; k++)
+                      {
+                          if (k == currentID)
+                              continue;
+
+                          //10.25  只要屏蔽区有rect，就可以认为屏幕打开的
+                          if (objFeature[k].rectIndex > -1 && objFeature[k].overlapScreen == overlapScreenID)	//有另个目标在相交屏蔽区内，此时可能连在一起，形成一个CCL//
+                              index = 1;
+                      }
+                      if (index == -1)
+                          screenTime = 600;	 //有其他目标，但不在这个屏蔽区内，标记600，不倒计时	//
+                      else
+                          screenTime = SCREENTIME;	 //	多目标，当前跟踪相交不在内，且其它目标也在【该】屏蔽区内	//
+                      //
+                  }
+              }
+
+              /* 03 如果当前目标完全在屏蔽区内（包含），且有其他目标，选取一个不在屏蔽区的目标跟	------------------------------------ */
+
+              if (insideScreenRange == 1)
+              {
+                  if (objNum > 1)																					//	目标不止一个	//
+                  {
+                      for (k = 0; k < MAXOBJNUM; k++)
+                      {
+                          if (k == currentID)
+                              continue;
+
+                          if (objFeature[k].overlapScreen == -1 && objFeature[k].trustedValue >= TRUSTTHRES)		//另个目标与其他屏蔽区不相交，则更换为当前目标，直接跟//
+                          {
+                              objFeature[currentID].isCurrentObj = 0;
+                              currentID = k;
+                              objFeature[currentID].isCurrentObj = 1;
+                              objFeature[currentID].Prestate_isCurrentObj = 0;									//20171128	//
+
+                              isOverlap = 0;
+                              insideScreenRange = 0;
+                              screenTime = 0;																	//目标和屏蔽区不相交，直接清零//
+                              break;
+                          }
+                      }
+                  }
+                  //否则，if (objNum <= 1)只有这一个包含在内的目标，跳过不处理//
+              }
+
+              /* 04 screenTime--  	------------------------------------ */
+              if (insideScreenRange == 1)
+              {
+                 //2017.10.30  判断目标从屏蔽区下方消失，若存在部分跟踪区，
+                 // 则可认为目标直接消失，否则，目标进入屏蔽区；
+                  if (screenTime > 0 && screenTime != 600)
+                  {
+
+                      if ((screenRange[overlapScreenID].y+ screenRange[overlapScreenID].height+8) < height)
+                          //如果屏蔽区未贯穿检测区，当人从屏蔽区底边消失时，防止跟到屏蔽区，直接回中。//
+                      {
+                          screenTime -= 5;
+                      }
+                      else
+                      {
+                          screenTime--;
+                      }
+
+                      //printf("__LINE__%d	screenTime=%d\n", __LINE__, screenTime);
+
+                      if (screenTime < 0)
+                      {
+                          screenTime = 0;
+                      }
+                  }
+//modified 3.30
+                  if (screenTime == 0)		//enter confirm again state
+                  {
+                     objFeature[currentID].confirmAgain = 1;
+                     objFeature[currentID].confirmValue=1;
+                     objFeature[currentID].confirmCount=0;
+                  }
+
+              }  //end of insideScreen==1
+          }  //end of currentID>-1 && haveScreenRange
+
+      }   //end of have obj
 
      //output
      if(objSplited==1)
@@ -1309,22 +1805,32 @@ void MainWindow::on_lkvb2_pushButton_clicked()
          outputRect=objFeature[currentID].lkRect;
          outputRect.x+=left;
          outputRect.y+=top;
-         outputTimeout=objFeature[currentID].notmoveCount;
+      //   outputTimeout=objFeature[currentID].notmoveCount;
+         cout<<" currentid="<<currentID;
          cout<<" trustedValue="<<objFeature[currentID].trustedValue;
+         cout<<" confirmAgain="<<objFeature[currentID].confirmAgain;
+         cout<<" confirmValue="<<objFeature[currentID].confirmValue;
+         cout<<" confirmCount="<<objFeature[currentID].confirmCount;
+         cout<<" notmoveCount="<<objFeature[currentID].notmoveCount;
          cout<<" noMatch="<<objFeature[currentID].noMatch;
+         cout<<endl;
+         cv::rectangle(inputFrame, outputRect,
+                            cv::Scalar(0, 0, 255), 4);
      }
-     else
-     {
-         outputRect=Rect(outputCenterx-20,outputCentery-30,40,60);
-     }
+//     else
+//     {
+//         outputRect=Rect(outputCenterx-20,outputCentery-30,40,60);
+//     }
 
-     cv::rectangle(inputFrame, outputRect,
-                        cv::Scalar(0, 0, 255), 4);
-     cout<<" currentid="<<currentID<<"  timeout="<<outputTimeout;
+     cout<<" ...Status...  ";
      cout<<"  object number="<<objNum;
-     cout<<"  inScreenRange="<<inScreenRange;
+     cout<<"  outputObjNum="<<outputObjNum;
+     cout<<"  inScreenRange="<<insideScreenRange;
+     cout<<"  isOverlap="<<isOverlap;
+     cout<<"  screenTime="<<screenTime;
      cout<<"  Jointed status="<<objJointed;
-     cout<<" objSplit "<<objSplited<<" notmove="<<notMoveRectNum;
+     cout<<" objSplit "<<objSplited<<" notmoveRect="<<notMoveRectNum;
+     cout<<endl;
 
      //init all where are some errors
      if(objNum>0)
@@ -1337,6 +1843,10 @@ void MainWindow::on_lkvb2_pushButton_clicked()
              objJointed=0;
              objSplited=0;
              jointedIndex=-1;
+             overlapScreenID=-1;
+             isOverlap=0;
+             insideScreenRange=0;
+             screenTime=0;
              currentDirection=-1;
              jointedDirection=-1;
              noObjCount=0;
@@ -1353,7 +1863,8 @@ void MainWindow::on_lkvb2_pushButton_clicked()
          objNum=1;
      }
     //set mask of current object to COLOR_CURRENTOBJ
-     if(currentID>=0){
+//modified 3.30  in confirm again state, dot not set mask of current obj(不锁定）
+     if(currentID>-1 && objFeature[currentID].confirmAgain==0){
          for(i=0; i<objFeature[currentID].rect.height; i++){
              index=(i+objFeature[currentID].rect.y)* updateMap.cols;
              for(j=objFeature[currentID].rect.x; j<objFeature[currentID].rect.width; j++)
@@ -1373,6 +1884,50 @@ void MainWindow::on_lkvb2_pushButton_clicked()
      imshow("Frame", colorFrame);
      imshow("Tracking",inputFrame);
 
+     //human skin detect
+#if SKIN
+     uint8_t *Pointer;
+     uint8_t Blue,Green,Red,Max,Min;
+
+     for (j = 0; j < height; j++)
+     {
+         Pointer = faceFrame.data + j * width*3;
+         //SkinP = SkinScan0 + Y * SkinStride;
+         for (i = 0; i < width; i++)
+         {
+             Blue = *Pointer; Green = *(Pointer + 1); Red = *(Pointer + 2);
+             //*Pointer= Green;
+             // *(Pointer + 2)=0;
+             if (Red > 75 && Green > 40 && Blue > 20 && Red > Blue && Red > Green && abs(Red - Green) > 15)
+             {
+                 if (Blue >= Green)
+                 {
+                     Max = Blue;
+                     Min = Green;
+                 }
+                 else
+                 {
+                     Max = Green;
+                     Min = Blue;
+                 }
+      //           if (Red > Max)
+                     Max = Red;
+      //           else if (Red < Min)
+      //               Min = Red;
+                 if (Max - Min > 15)
+                 {
+                     *Pointer = 255;
+                     *(Pointer+1)=0;
+                     *(Pointer+2)=0;
+                 }
+             }
+             Pointer += 3;
+       //      SkinP++;
+         }
+     }
+
+     imshow("faceFrame",faceFrame);
+#endif  //end of skin detect
 
      gettimeofday(&tsEnd, NULL);//-----------------------测试时间
     // long runtimes;
@@ -1380,13 +1935,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
      cout<<"  time: "<<runtimes/1000<<"................end"<<endl;
 
       /* Gets the input from the keyboard. */
-      keyboard = waitKey(33);
-//       if ((frameNumber % 100)==0){
-//           libvibeModel_Sequential_PrintParameters(model);
-//           cout<<"Max rectangle: width"<< maxrect.width
-//                        <<" height"<< maxrect.height<<endl;
-//      }
-//     waitKey();
+      keyboard = waitKey(0);
 
     } //end of while
 
@@ -1405,7 +1954,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 void MainWindow::on_openvideo_pushButton_clicked()
 {
     filename = QFileDialog::getOpenFileName(this, tr("select video file"), ".",
-                                              tr("Vedio Files(*.mp4 *.avi *.mkv *.yuv)"));
+                                              tr("Vedio Files(*.mp4 *.avi *.mkv *.yuv *.wmv)"));
 
     if (filename.isEmpty()) {
         ui->warning_lineEdit->setText("file open does not success !!!");
@@ -1415,5 +1964,132 @@ void MainWindow::on_openvideo_pushButton_clicked()
     ui->warning_lineEdit->clear();
 
 
-     return;
+    capture.open(filename.toStdString());
+    //   VideoCapture capture("rtsp://192.168.100.182/2");
+    if(!capture.isOpened())
+    {
+        ui->warning_lineEdit->setText("File open error,please open video file first");
+        return ;
+    }
+
+    if (!capture.read(inputFrame)) {
+        ui->warning_lineEdit->setText("end of File ");
+        capture.release();
+
+        cv::destroyAllWindows();
+        return;
+    }
+
+    cv::namedWindow(inputWindow);
+    cv::imshow(inputWindow,inputFrame);
+
+    return;
+}
+
+void MainWindow::on_roi_pushButton_clicked()
+{
+    if(!capture.isOpened())
+    {
+        ui->warning_lineEdit->setText("Please open a video file first");
+        return ;
+    }
+   ui->warning_lineEdit->setText("setting ROI.......");
+   cv::Mat tempFrame;
+   rectState=NOT_SET;
+   cv::setMouseCallback( inputWindow, roi_on_mouse, 0 );
+   while(1)
+   {
+       if(rectState==EXIT)
+       {
+           ui->warning_lineEdit->setText("ROI set ok");
+           break;
+       }
+
+       if(rectState==SET)
+       {
+           rectState=NOT_SET;
+           roiState=true;
+       }
+       inputFrame.copyTo(tempFrame);
+       cv::rectangle(tempFrame,roiRect,cv::Scalar(255, 0, 0), 2);
+       if(maskState1)
+            cv::rectangle(tempFrame,maskRect1,cv::Scalar(0, 255, 0), 2);
+       if(maskState2)
+            cv::rectangle(tempFrame,maskRect2,cv::Scalar(0, 255, 0), 2);
+       cv::imshow(inputWindow,tempFrame);
+       cv::waitKey(20);
+   }
+   cv::setMouseCallback( inputWindow, nothing_on_mouse, 0 );
+}
+
+void MainWindow::on_mask1_pushButton_clicked()
+{
+    if(!capture.isOpened())
+    {
+        ui->warning_lineEdit->setText("Please open a video file first");
+        return ;
+    }
+   ui->warning_lineEdit->setText("setting MASK.......");
+   cv::Mat tempFrame;
+   rectState=NOT_SET;
+   cv::setMouseCallback( inputWindow, mask1_on_mouse, 0 );
+   while(1)
+   {
+       if(rectState==EXIT)
+       {
+           ui->warning_lineEdit->setText("MASK set ok");
+           break;
+       }
+
+       if(rectState==SET)
+       {
+           rectState=NOT_SET;
+           maskState1=true;
+       }
+       inputFrame.copyTo(tempFrame);
+       if(roiState)
+            cv::rectangle(tempFrame,roiRect,cv::Scalar(255, 0, 0), 2);
+       if(maskState2)
+            cv::rectangle(tempFrame,maskRect2,cv::Scalar(0, 255, 0), 2);
+       cv::rectangle(tempFrame,maskRect1,cv::Scalar(0, 255, 0), 2);
+       cv::imshow(inputWindow,tempFrame);
+       cv::waitKey(10);
+   }
+   cv::setMouseCallback( inputWindow, nothing_on_mouse, 0 );
+}
+
+void MainWindow::on_mask2_pushButton_clicked()
+{
+    if(!capture.isOpened())
+    {
+        ui->warning_lineEdit->setText("Please open a video file first");
+        return ;
+    }
+   ui->warning_lineEdit->setText("setting MASK.......");
+   cv::Mat tempFrame;
+   rectState=NOT_SET;
+   cv::setMouseCallback( inputWindow, mask2_on_mouse, 0 );
+   while(1)
+   {
+       if(rectState==EXIT)
+       {
+           ui->warning_lineEdit->setText("MASK set ok");
+           break;
+       }
+
+       if(rectState==SET)
+       {
+           rectState=NOT_SET;
+           maskState2=true;
+       }
+       inputFrame.copyTo(tempFrame);
+       if(roiState)
+            cv::rectangle(tempFrame,roiRect,cv::Scalar(255, 0, 0), 2);
+       if(maskState1)
+            cv::rectangle(tempFrame,maskRect1,cv::Scalar(0, 255, 0), 2);
+       cv::rectangle(tempFrame,maskRect2,cv::Scalar(0, 255, 0), 2);
+       cv::imshow(inputWindow,tempFrame);
+       cv::waitKey(10);
+   }
+   cv::setMouseCallback( inputWindow, nothing_on_mouse, 0 );
 }

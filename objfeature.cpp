@@ -14,6 +14,7 @@ void object_Feature_Init(object_Feature_t &obj)
   obj.trustCount      =0;
   obj.notmoveCount    = 0;
   obj.isCurrentObj    = false;
+  obj.Prestate_isCurrentObj=false;
   obj.noMatch         =-1;
 
   //
@@ -30,6 +31,13 @@ void object_Feature_Init(object_Feature_t &obj)
 
   obj.points[0].clear();
   obj.points[1].clear();
+
+  obj.overlapScreen=-1;
+  obj.inScreen=false;
+
+  obj.confirmAgain=0;
+  obj.confirmCount=0;
+  obj.confirmValue=-1;
   return;
 }
 
@@ -48,8 +56,10 @@ bool isMatchedRect(cv::Rect &rect1,cv::Rect &rect2)
 bool isMatchedRectInitial(cv::Rect &rect,cv::Rect &initial)
 {
     cv::Rect temp= rect & initial;
+//modified 3.30
+   // return (temp.area()> initial.area()/10);
+    return (temp.area()>rect.area()*4/5);
 
-    return (temp.area()> initial.area()/10);
 }
 
 bool isMatchedRectLK(cv::Rect &lkrect,cv::Rect &vbrect)
@@ -132,4 +142,15 @@ void BubbleSort(std::vector<cv::Rect> &array, int n)
             }
         }
     }
+}
+
+bool IsInsideScreen(cv::Rect2i &screen, cv::Rect2i &a)
+{
+    if ((screen.y - SHIELDMARGIN) <= a.y
+            && (screen.y + screen.height + SHIELDMARGIN) >= a.y + a.height
+            && (screen.x - SHIELDMARGIN) <= a.x
+            && (screen.x + screen.width + SHIELDMARGIN) >= a.x + a.width)
+        return true;
+    else
+        return false;
 }

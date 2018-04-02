@@ -107,9 +107,9 @@ vibeModel_Sequential_t *libvibeModel_Sequential_New()
 
   /* Default parameters values. */
   model->numberOfSamples         = 20;
-  model->matchingThreshold       = 8;
+  model->matchingThreshold       = 7;
   model->matchingNumber          = 2;
-  model->updateFactor            = 10;
+  model->updateFactor            = 5;
 
   /* Storage for the history. */
   model->historyImage            = NULL;

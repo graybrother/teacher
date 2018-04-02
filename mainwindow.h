@@ -2,14 +2,13 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QMainWindow>
 #include <QFile>
 #include <QFileDialog>
 #include <iostream>
 #include <string>
 
 #include "opencv.hpp"
-#include "face.hpp"
+
 
 
 namespace Ui {
@@ -29,6 +28,12 @@ private slots:
 
     void on_openvideo_pushButton_clicked();
 
+    void on_roi_pushButton_clicked();
+
+    void on_mask1_pushButton_clicked();
+
+    void on_mask2_pushButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString filename;
@@ -36,5 +41,7 @@ private:
     cv::Mat image;
     cv::Mat result;
 };
+
+
 
 #endif // MAINWINDOW_H
