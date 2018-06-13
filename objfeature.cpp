@@ -22,7 +22,7 @@ void object_Feature_Init(object_Feature_t &obj)
   obj.screenIndex      = -1;
  //
  // obj.center=cv::Point2f(0,0);
-  obj.rect=cv::Rect(0,0,0,0);
+  obj.rect=cv::Rect2i(0,0,0,0);
   obj.mvIndex=0;
   memset(obj.objMvX,0,sizeof(obj.objMvX));
   memset(obj.objMvY,0,sizeof(obj.objMvY));
@@ -42,10 +42,10 @@ void object_Feature_Init(object_Feature_t &obj)
 }
 
 
-bool isMatchedRect(cv::Rect &rect1,cv::Rect &rect2)
+bool isMatchedRect(cv::Rect2i &rect1,cv::Rect2i &rect2)
 {
-    cv::Rect rect=rect1 & rect2;
-    cv::Rect minRect;
+    cv::Rect2i rect=rect1 & rect2;
+    cv::Rect2i minRect;
     if(rect1.area()<rect2.area())
         minRect=rect1;
     else
@@ -53,25 +53,25 @@ bool isMatchedRect(cv::Rect &rect1,cv::Rect &rect2)
     return (rect.area()> minRect.area()/4);
 }
 
-bool isMatchedRectInitial(cv::Rect &rect,cv::Rect &initial)
+bool isMatchedRectInitial(cv::Rect2i &rect,cv::Rect2i &initial)
 {
-    cv::Rect temp= rect & initial;
+    cv::Rect2i temp= rect & initial;
 //modified 3.30
    // return (temp.area()> initial.area()/10);
     return (temp.area()>rect.area()*4/5);
 
 }
 
-bool isMatchedRectLK(cv::Rect &lkrect,cv::Rect &vbrect)
+bool isMatchedRectLK(cv::Rect2i &lkrect,cv::Rect2i &vbrect)
 {
-    cv::Rect rect=lkrect & vbrect;
+    cv::Rect2i rect=lkrect & vbrect;
     return (rect.area()> lkrect.area()/5);
 }
 
-bool isMatchedNotMove(cv::Rect &notMoveRect,cv::Rect &vbrect)
+bool isMatchedNotMove(cv::Rect2i &notMoveRect,cv::Rect2i &vbrect)
 {
-    cv::Rect rect=notMoveRect & vbrect;
-    cv::Rect minRect;
+    cv::Rect2i rect=notMoveRect & vbrect;
+    cv::Rect2i minRect;
     if(notMoveRect.area()<vbrect.area())
         minRect=notMoveRect;
     else
@@ -79,31 +79,31 @@ bool isMatchedNotMove(cv::Rect &notMoveRect,cv::Rect &vbrect)
     return (rect.area()> minRect.area()/2);
 }
 
-bool isMatchedNotMove_1(cv::Rect &notMoveRect,cv::Rect &vbrect)
+bool isMatchedNotMove_1(cv::Rect2i &notMoveRect,cv::Rect2i &vbrect)
 {
-    cv::Rect rect=notMoveRect & vbrect;
-    cv::Rect minRect;
+    cv::Rect2i rect=notMoveRect & vbrect;
+    cv::Rect2i minRect;
     if(notMoveRect.area()<vbrect.area())
         minRect=notMoveRect;
     else
         minRect=vbrect;
     return (rect.area()> minRect.area()*4/5);
 }
-bool isInRect(cv::Rect &rect, cv::Rect &target)
+bool isInRect(cv::Rect2i &rect, cv::Rect2i &target)
 {
     return(rect.x>=target.x && rect.y>=target.y
            && rect.width<=target.width && rect.height<=target.height);
 }
 
 
-bool isSameRect(cv::Rect &rect,cv::Rect &screenRange)
+bool isSameRect(cv::Rect2i &rect,cv::Rect2i &screenRange)
 {
-    cv::Rect rect1=rect & screenRange;
-    cv::Rect rect2=rect |  screenRange;
+    cv::Rect2i rect1=rect & screenRange;
+    cv::Rect2i rect2=rect |  screenRange;
     return ((rect2.area()-rect1.area())<3000);
 }
 
-cv::Rect getRect(std::vector<cv::Point2f> &point )
+cv::Rect2i getRect(std::vector<cv::Point2f> &point )
 {
     int sumX=0;
     int sumY=0;
@@ -124,12 +124,12 @@ cv::Rect getRect(std::vector<cv::Point2f> &point )
          if(point[i].y> recbottom)
               recbottom=point[i].y;
     }
-     return cv::Rect(recleft,rectop,recright-recleft,recbottom-rectop);
+     return cv::Rect2i(recleft,rectop,recright-recleft,recbottom-rectop);
 }
 
-void BubbleSort(std::vector<cv::Rect> &array, int n)
+void BubbleSort(std::vector<cv::Rect2i> &array, int n)
 {
-    cv::Rect temp;
+    cv::Rect2i temp;
     for (int i=n-1;i>0;i--)
     {
         for (int j=0;j<i;j++)
@@ -153,4 +153,10 @@ bool IsInsideScreen(cv::Rect2i &screen, cv::Rect2i &a)
         return true;
     else
         return false;
+}
+
+int MatchedArea(cv::Rect2i &rect1,cv::Rect2i &rect2)
+{
+    cv::Rect2i rect=rect1 & rect2;
+    return rect.area();
 }

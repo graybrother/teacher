@@ -4,9 +4,14 @@
 
 #include "vibe-background-sequential.h"
 #include "objfeature.h"
+#include "histogram.h"
+#include "colorhistogram.h"
+#include "contentfinder.h"
 
 #define SKIN 0
-#define FRAMEINTERV 3
+#define FRAMEINTERV 2
+#define RGB  0
+#define HISTOGRAM 0
 
 enum{ NOT_SET = 0, IN_PROCESS = 1, SET = 2 ,EXIT =3 };
 cv::VideoCapture capture;
@@ -300,19 +305,28 @@ void MainWindow::on_lkvb2_pushButton_clicked()
     int i,j,index,disToCenter;
     Mat element(5,5,CV_8U,cv::Scalar(1));
 
+//added 6.07  some code for backproject
+    Mat hsvFrame;
+    Mat imageROI;
+    ColorHistogram hc; //声明一个彩色直方图类hc用于下面获取ROI直方图的操作
+    Mat shist;
+    Mat backFrame;
+    ContentFinder finder;
+    vector<cv::Mat> v;
+
     vector<vector<Point> > contours;
-    vector<Rect> recNoSort;
-    vector<Rect> rects;
+    vector<Rect2i> recNoSort;
+    vector<Rect2i> rects;
     int rectsNum=0;
-    vector<Rect> notMoveRect;
+    vector<Rect2i> notMoveRect;
     notMoveRect.clear();
     int notMoveRectNum=0;
 
 
     int xxx;
-    Rect rectemp;
-    Rect recpre;
-    Rect vbtemp;
+    Rect2i rectemp;
+    Rect2i recpre;
+    Rect2i vbtemp;
 
 
 //       Rect maxrect;
@@ -330,7 +344,10 @@ void MainWindow::on_lkvb2_pushButton_clicked()
  //   std::vector<cv::Point2f> grid; // created features
 
     std::vector<uchar> status; // status of tracked features
+    std::vector<uchar> statusFB;   //status of forward-back
     std::vector<float> err; // error in tracking
+    std::vector<float> errorFB;
+    std::vector<cv::Point2f> pointsFB;
 
     object_Feature_t objFeature[MAXOBJNUM];
    // object_Feature_t* objTemp;
@@ -352,11 +369,11 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 
     int pointNum=0;
     int moveNum=0;
-    double xmove=0;
-    double ymove=0;
-    double sumXmove=0;
-    double sumYmove=0;
-    double meanMove=0;
+    float xmove=0;
+    float ymove=0;
+    float sumXmove=0;
+    float sumYmove=0;
+    float meanMove=0;
 
     int lkLeft,lkRight,lkTop,lkBottom;
     int candoLK;
@@ -417,13 +434,18 @@ void MainWindow::on_lkvb2_pushButton_clicked()
         return ;
     }
     namedWindow("Frame");
-   // namedWindow("Gray");
+    namedWindow("Gray");
     namedWindow("ShowRect");
     namedWindow("Segmentation by ViBe");
     namedWindow("Afterdilate");
     namedWindow("Tracking");
 #if SKIN
     namedWindow("faceFrame");
+#endif
+#if HISTOGRAM
+    namedWindow("backProject Frame");
+    namedWindow("Saturation mask");
+    namedWindow("After And");
 #endif
     /* Model for ViBe. */
     vibeModel_Sequential_t *model = NULL; /* Model used by ViBe. */
@@ -443,16 +465,16 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           return;
       }
 
-       Mat roiframe= inputFrame(processRange);
-       roiframe.copyTo(colorFrame);
-       roiframe.copyTo(showrectMap);
-   //    roiframe.copyTo(faceFrame);
+       Mat roiFrame= inputFrame(processRange);
+       roiFrame.copyTo(colorFrame);
+       roiFrame.copyTo(showrectMap);
+   //    roiFrame.copyTo(faceFrame);
       //show the current frame
    //   imshow("Frame", inputFrame);
       //convert to gray
       cvtColor(colorFrame, frame, CV_BGR2GRAY);
 
-   //   imshow("Gray",frame);
+      imshow("Gray",frame);
 
  //      cv::LUT(frame,lut,afterLut);
 
@@ -463,14 +485,23 @@ void MainWindow::on_lkvb2_pushButton_clicked()
       if (frameNumber == 1) {
         segmentationMap = Mat(frame.rows, frame.cols, CV_8UC1);
         model = (vibeModel_Sequential_t*)libvibeModel_Sequential_New();
+#if RGB
+        libvibeModel_Sequential_AllocInit_8u_C3R(model, colorFrame.data, colorFrame.cols,colorFrame.rows);
+#else
         libvibeModel_Sequential_AllocInit_8u_C1R(model, frame.data, frame.cols, frame.rows);
+#endif
       }
 
       /* ViBe: Segmentation and updating. */
       //give some time for background building
       if (frameNumber < 10){
+#if RGB
+        libvibeModel_Sequential_Segmentation_8u_C3R(model, colorFrame.data, segmentationMap.data);
+        libvibeModel_Sequential_Update_8u_C3R(model, colorFrame.data, segmentationMap.data);
+#else
         libvibeModel_Sequential_Segmentation_8u_C1R(model, frame.data, segmentationMap.data);
         libvibeModel_Sequential_Update_8u_C1R(model, frame.data, segmentationMap.data);
+#endif
         ++frameNumber;
         continue;
       }
@@ -496,9 +527,11 @@ void MainWindow::on_lkvb2_pushButton_clicked()
       gettimeofday(&tsBegin, NULL);
 
 // **ViBe: Segmentation..............
-
+#if RGB
+      libvibeModel_Sequential_Segmentation_8u_C3R(model, colorFrame.data, segmentationMap.data);
+#else
       libvibeModel_Sequential_Segmentation_8u_C1R(model, frame.data, segmentationMap.data);
-
+#endif
       gettimeofday(&tsEnd, NULL);//-----------------------测试时间
 
       runtimes=1000000L*(tsEnd.tv_sec-tsBegin.tv_sec)+tsEnd.tv_usec-tsBegin.tv_usec;
@@ -528,7 +561,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
          //rect is the same of screenrange,let it go
 //         if(haveScreenRange && isSameRect(rectemp,screenRange))
 //             continue;
-         if(rectemp.area()>300 && rectemp.area()<50000
+         if(rectemp.area()>200 && rectemp.area()<50000
                  && rectemp.width>5 && rectemp.height>5
                  && rectemp.width<300 && rectemp.height<155){
 
@@ -670,11 +703,53 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 
       haveMatchedRect=false;
       if(currentID>-1){
+
+          haveMatchedRect=false;
+          index=-1;
+          int maxArea=MINMATCHAREA;
           for(k=0; k<rectsNum; k++)
           {
-              if(isMatchedRectLK(objFeature[currentID].lkRect,rects[k]))
+
+              int temparea=MatchedArea(objFeature[currentID].lkRect,rects[k]);
+              if(temparea>maxArea)
               {
-                  objFeature[currentID].rectIndex=k;
+                  maxArea=temparea;
+                  index=k;
+              }
+          }
+          if(index > -1)
+          {
+              objFeature[currentID].rectIndex=index;
+              // set after process join & split condition
+              /*aaa*/              //  objFeature[currentID].rect=rects[k];
+              objFeature[currentID].noMatch=-1;
+              //                        if(vbNum<2)
+              //                            matched[k]=1;
+              matchedNum++;
+              haveMatchedRect=true;
+              cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<index;
+              cout<<"rect x width  "<<rects[index].x<<" "<<rects[index].width<<endl;
+
+          }
+
+/*aaa*/   if(!haveMatchedRect)
+          {
+              haveMatchedRect=false;
+              index=-1;
+              maxArea=MINMATCHAREA;
+              for(k=0; k<rectsNum; k++)
+              {
+
+                  int temparea=MatchedArea(objFeature[currentID].rect,rects[k]);
+                  if(temparea>maxArea)
+                  {
+                      maxArea=temparea;
+                      index=k;
+                  }
+              }
+              if(index > -1)
+              {
+                  objFeature[currentID].rectIndex=index;
                   // set after process join & split condition
                   /*aaa*/              //  objFeature[currentID].rect=rects[k];
                   objFeature[currentID].noMatch=-1;
@@ -682,29 +757,9 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   //                            matched[k]=1;
                   matchedNum++;
                   haveMatchedRect=true;
-                  cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<k;
-                  cout<<"rect x width  "<<rects[k].x<<" "<<rects[k].width<<endl;
-                  break;
-              }
-          }
-/*aaa*/   if(!haveMatchedRect)
-          {
-              for(k=0; k<rectsNum; k++)
-              {
-                  if(isMatchedRect(objFeature[currentID].rect,rects[k]))
-                  {
-                      objFeature[currentID].rectIndex=k;
-                      // set after process join & split condition
-                      /*aaa*/              //  objFeature[currentID].rect=rects[k];
-                      objFeature[currentID].noMatch=-1;
-                      //                        if(vbNum<2)
-                      //                            matched[k]=1;
-                      matchedNum++;
-                      haveMatchedRect=true;
-                      cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<k;
-                      cout<<"rect x width  "<<rects[k].x<<" "<<rects[k].width<<endl;
-                      break;
-                  }
+                  cout<<"a currentobj matched  id= "<<currentID<<"  k= "<<index;
+                  cout<<"rect x width  "<<rects[index].x<<" "<<rects[index].width<<endl;
+
               }
           }
           if(!haveMatchedRect){
@@ -930,19 +985,30 @@ void MainWindow::on_lkvb2_pushButton_clicked()
            {
 
                haveMatchedRect=false;
+               index=-1;
+               int maxArea=MINMATCHAREA;
                for(k=0; k<rectsNum; k++)
                {
-                   if(isMatchedRect(objFeature[i].rect,rects[k])
-                           && matched[k]==0)
+                   if(matched[k]==1)
+                       continue;
+                   int temparea=MatchedArea(objFeature[i].rect,rects[k]);
+                   if(temparea>maxArea)
                    {
-                       objFeature[i].rectIndex=k;
-                       objFeature[i].rect=rects[k];
-                       matched[k]=1;
-                       matchedNum++;
-                       haveMatchedRect=true;
+                       maxArea=temparea;
+                       index=k;
                    }
                }
-               if(!haveMatchedRect )
+
+               if(index> -1)
+
+               {
+                   objFeature[i].rectIndex=index;
+                   objFeature[i].rect=rects[index];
+                   matched[index]=1;
+                   matchedNum++;
+               }
+
+               else
                {     //if there is a objFeture have no matched rect
                    //a confirmed obj removed
                    if(objFeature[i].trustedValue>=TRUSTTHRES)
@@ -996,7 +1062,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
               cout<<" rectindex="<<objFeature[k].rectIndex;
               cout<<" trust="<<objFeature[k].trustedValue;
               cout<<" points="<<objFeature[k].trackedPointNum<<endl;
-              cv::rectangle(colorFrame, rects[objFeature[k].rectIndex],
+              cv::rectangle(roiFrame, rects[objFeature[k].rectIndex],
                       cv::Scalar(255, 0, 0), 2);
           }
       }
@@ -1046,7 +1112,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
           else if(objFeature[k].trustedValue== -1)
               continue;
          //do not track jointed obj
-          else if(objJointed>0 && k==jointedIndex)
+          else if(objJointed > 0 && k==jointedIndex)
               continue;
           //need to do lk
           else
@@ -1063,25 +1129,55 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   pointNum=0;
                   rectemp=objFeature[k].rect;
 
-                  for (int i = 0; i < 10; i++)
-                  {
-                      x=rectemp.x+i*rectemp.width/10.;
-                      p.x=x;
+                  //2018.04.03 修改取点方法
+                  int xGap = (rectemp.width + 5)/ 10;
+                  if(xGap==0)
+                      xGap = 1;
+                  int yGap = (rectemp.height + 10)/ 20;
+                  if(yGap==0)
+                      yGap = 1;
 
-                      for (int j = 0; j < 20; j++)
+                  for (i = 0; i < rectemp.width; i += xGap)
+                  {
+                      x = rectemp.x + i;
+                      p.x=x;
+                      if(pointNum == 200)
+                            {break;}
+                      for (j = 0; j < rectemp.height; j += yGap)
                       {
-                          y=rectemp.y+j*rectemp.height/20.;
-                          if(*(segTemp+y*width+x)==COLOR_FOREGROUND)
+                          y = rectemp.y + j;
+                          index = y*width;
+                          if (*(segTemp + index + x) == COLOR_FOREGROUND)
                           {
                               p.y=y;
                               objFeature[k].points[0].push_back(p);
                               pointNum++;
-                              cv::circle(colorFrame, p, 1,
-                                         cv::Scalar(255, 0, 0), -1);
+                              cv::circle(roiFrame, p, 1,cv::Scalar(255, 0, 0), -1);
+                              if(pointNum == 200)
+                                    {break;}
                           }
-
                       }
                   }
+                  //old get points method
+//                  for (int i = 0; i < 10; i++)
+//                  {
+//                      x=rectemp.x+i*rectemp.width/10.;
+//                      p.x=x;
+
+//                      for (int j = 0; j < 20; j++)
+//                      {
+//                          y=rectemp.y+j*rectemp.height/20.;
+//                          if(*(segTemp+y*width+x)==COLOR_FOREGROUND)
+//                          {
+//                              p.y=y;
+//                              objFeature[k].points[0].push_back(p);
+//                              pointNum++;
+//                              cv::circle(roiFrame, p, 1,
+//                                         cv::Scalar(255, 0, 0), -1);
+//                          }
+
+//                      }
+//                  }
 
                   objFeature[k].trackedPointNum=pointNum;
                   if(pointNum>5)
@@ -1100,12 +1196,15 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   if(objFeature[k].trackedPointNum < LEASTLKPOINTS)
                   {
                       objFeature[k].points[0].clear();
-                      rectemp=objFeature[k].lkRect;
                       vbtemp=objFeature[k].rect;
+                      rectemp=objFeature[k].lkRect;
+                      rectemp.y=vbtemp.y;
+                      rectemp.height=vbtemp.height;
+
                       centerPoint.x=rectemp.x+rectemp.width/2;
                       centerPoint.y=rectemp.y+rectemp.height/2;
 
-                      cv::circle(colorFrame, centerPoint, 4,
+                      cv::circle(roiFrame, centerPoint, 4,
                               cv::Scalar(0, 255, 255), -1);
                       cout<<" k<least get new,lkrect= "<<rectemp.x<<" "
                          <<rectemp.y<<" "<<rectemp.width<<" "<<rectemp.height<<endl;
@@ -1118,48 +1217,77 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                           if((rectemp.x+rectemp.width)>(width-1))
                               rectemp.width=width-1-rectemp.x;
                       }
-                      if(rectemp.height<30)
-                      {
-                          rectemp.y=centerPoint.y-25;
-                          if(rectemp.y<0)
-                              rectemp.y=0;
-                          rectemp.height=50;
-                          if((rectemp.y+rectemp.height)>(height-1))
-                              rectemp.height=height-1-rectemp.y;
+//                      if(rectemp.height<30)
+//                      {
+//                          rectemp.y=centerPoint.y-25;
+//                          if(rectemp.y<0)
+//                              rectemp.y=0;
+//                          rectemp.height=50;
+//                          if((rectemp.y+rectemp.height)>(height-1))
+//                              rectemp.height=height-1-rectemp.y;
 
-                      }
+//                      }
                       if(rectemp.x<vbtemp.x)
                           rectemp.x=vbtemp.x;
                       if((rectemp.x+rectemp.width)>(vbtemp.x+vbtemp.width))
                           rectemp.width=vbtemp.x+vbtemp.width-rectemp.x;
-                      if(rectemp.y<vbtemp.y)
-                          rectemp.y=vbtemp.y;
-                      if(rectemp.y+rectemp.height>vbtemp.y+vbtemp.height)
-                          rectemp.height=vbtemp.y+vbtemp.height-rectemp.y;
+//                      if(rectemp.y<vbtemp.y)
+//                          rectemp.y=vbtemp.y;
+//                      if(rectemp.y+rectemp.height>vbtemp.y+vbtemp.height)
+//                          rectemp.height=vbtemp.y+vbtemp.height-rectemp.y;
 
 
 
                       pointNum=0;
+                      objFeature[k].points[0].clear();
+                      //2018.04.03 修改取点方法
+                      int xGap = (rectemp.width + 5)/ 10;
+                      if(xGap==0)
+                          xGap = 1;
+                      int yGap = (rectemp.height + 10)/ 20;
+                      if(yGap==0)
+                          yGap = 1;
 
-                      for (int i = 0; i < 10; i++)
+                      for (i = 0; i < rectemp.width; i += xGap)
                       {
-                          x=rectemp.x+i*rectemp.width/10.;
+                          x = rectemp.x + i;
                           p.x=x;
-
-                          for (int j = 0; j < 20; j++)
+                          if(pointNum == 200)
+                                {break;}
+                          for (j = 0; j < rectemp.height; j += yGap)
                           {
-                              y=rectemp.y+j*rectemp.height/20.;
-                              if(*(segTemp+y*width+x)==COLOR_FOREGROUND)
+                              y = rectemp.y + j;
+                              index = y*width;
+                              if (*(segTemp + index + x) == COLOR_FOREGROUND)
                               {
                                   p.y=y;
                                   objFeature[k].points[0].push_back(p);
                                   pointNum++;
-                                  cv::circle(colorFrame, p, 1,
-                                             cv::Scalar(255, 0, 0), -1);
+                                  cv::circle(roiFrame, p, 1,cv::Scalar(255, 0, 0), -1);
+                                  if(pointNum == 200)
+                                        {break;}
                               }
-
                           }
                       }
+//                      for (int i = 0; i < 10; i++)
+//                      {
+//                          x=rectemp.x+i*rectemp.width/10.;
+//                          p.x=x;
+
+//                          for (int j = 0; j < 20; j++)
+//                          {
+//                              y=rectemp.y+j*rectemp.height/20.;
+//                              if(*(segTemp+y*width+x)==COLOR_FOREGROUND)
+//                              {
+//                                  p.y=y;
+//                                  objFeature[k].points[0].push_back(p);
+//                                  pointNum++;
+//                                  cv::circle(roiFrame, p, 1,
+//                                             cv::Scalar(255, 0, 0), -1);
+//                              }
+
+//                          }
+//                      }
                       objFeature[k].trackedPointNum=pointNum;
                       if(pointNum>5)
                         candoLK=1;
@@ -1183,7 +1311,49 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                           objFeature[k].points[1], // output point positions in the 2nd image
                           status, // tracking success
                           err, // tracking error
-                          winSize,1,termcrit,0,0.01);
+                          winSize,2,termcrit,0,0.01);
+
+ //added 06.12
+                  pointNum=0;
+                  for(i=0; i< objFeature[k].points[1].size();i++)
+                  {
+                      if(status[i])
+                      {
+                          objFeature[k].points[1][pointNum] = objFeature[k].points[1][i];
+                          objFeature[k].points[0][pointNum++] = objFeature[k].points[0][i];
+                      }
+                  }
+                  cout<<"first lk points num="<<pointNum<<endl;
+                   objFeature[k].points[0].resize(pointNum);
+                   objFeature[k].points[1].resize(pointNum);
+
+                  cv::calcOpticalFlowPyrLK(
+                              frame,frame_prev,  // 2 consecutive images
+                              objFeature[k].points[1], // input point positions in first image
+                          pointsFB, // output point positions in the 2nd image
+                          statusFB, // tracking success
+                          errorFB, // tracking error
+                          winSize,2,termcrit,0,0.01);
+
+                  pointNum=0;
+                  for( int i= 0; i<pointsFB.size(); i++ )
+                  {
+                     if(statusFB[i])
+                     {
+                      errorFB[i] = norm(pointsFB[i]-objFeature[k].points[0][i]);//norm()求矩阵或向量的范数??绝对值？
+                     // cout<<" error=" <<errorFB[i];
+                      if(errorFB[i]<=FBERROR)
+                       {
+                           objFeature[k].points[1][pointNum] = objFeature[k].points[1][i];
+                           objFeature[k].points[0][pointNum++] = objFeature[k].points[0][i];
+                       }
+                     }
+                  }
+                  cout<<"second lk points num="<<pointNum<<endl;
+                  objFeature[k].points[0].resize(pointNum);
+                  objFeature[k].points[1].resize(pointNum);
+ //end of add
+
                   //  a.loop over the tracked points to reject some
                   pointNum=0;
                   moveNum=0;
@@ -1201,7 +1371,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                           {
                               objFeature[k].points[1][pointNum] = objFeature[k].points[1][i];
                               objFeature[k].points[0][pointNum++] = objFeature[k].points[0][i];
-                              cv::circle(colorFrame, objFeature[k].points[1][i], 1,
+                              cv::circle(roiFrame, objFeature[k].points[1][i], 1,
                                       cv::Scalar(0, 255, 0), -1);
                               // if point has moved,calculate sum
                               if((fabs(xmove)+fabs(ymove))>0.01)
@@ -1270,7 +1440,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                       if(moveNum>0)
                       {
                           meanMove=(fabs(sumXmove)+fabs(sumYmove))/moveNum;
-                          meanMove=meanMove/4;
+                          meanMove=meanMove/5.;
                           pointNum=0;
                           sumXmove=0;
                           sumYmove=0;
@@ -1281,7 +1451,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                               if((fabs(xmove)+fabs(ymove))>meanMove)
                               {
                                   objFeature[k].points[1][pointNum++] = objFeature[k].points[1][i];
-                                  cv::circle(colorFrame, objFeature[k].points[1][i], 1,
+                                  cv::circle(roiFrame, objFeature[k].points[1][i], 1,
                                           cv::Scalar(0, 0, 255), -1);
                                   sumXmove += xmove;
                                   sumYmove += ymove;
@@ -1321,7 +1491,7 @@ void MainWindow::on_lkvb2_pushButton_clicked()
                   objFeature[k].moveY=sumYmove/MOVENUM;
 
                   // draw obj under tracking  lkrect
-                  cv::rectangle(colorFrame, objFeature[k].lkRect,
+                  cv::rectangle(roiFrame, objFeature[k].lkRect,
                                 cv::Scalar(255, 255, 255), 1);
 
                   cout<<"--k= "<<k;
@@ -1876,12 +2046,16 @@ void MainWindow::on_lkvb2_pushButton_clicked()
          }
      }
      //VIBE background update
+#if RGB
+     libvibeModel_Sequential_Update_8u_C3R(model, colorFrame.data, updateMap.data);
+#else
      libvibeModel_Sequential_Update_8u_C1R(model, frame.data, updateMap.data);
+#endif
 
      cv::swap(frame_prev, frame);
 
       /* Shows  the segmentation map. */
-     imshow("Frame", colorFrame);
+     imshow("Frame", roiFrame);
      imshow("Tracking",inputFrame);
 
      //human skin detect
@@ -1928,6 +2102,58 @@ void MainWindow::on_lkvb2_pushButton_clicked()
 
      imshow("faceFrame",faceFrame);
 #endif  //end of skin detect
+
+
+#if HISTOGRAM
+
+
+     if(currentID>-1)
+     {
+         rectemp=objFeature[currentID].lkRect;
+         if(rectemp.area()<100)
+            rectemp=objFeature[currentID].rect;
+         rectemp.width-=1;
+         rectemp.height-=1;
+
+         cvtColor(colorFrame, hsvFrame, CV_BGR2HSV);
+
+        split(hsvFrame,v);
+        int minSat=65;
+     // Eliminate pixels with low saturation
+         cv::threshold(v[1],v[1],minSat,255,cv::THRESH_BINARY);//根据饱和度进行阈值分割，HSV色彩空间的第2个通道v[1]为饱和度通道
+         imshow("Saturation mask",v[1]);//显示阈值分割后的饱和度蒙板
+
+         imageROI= colorFrame(rectemp); // teacher region
+
+
+//            // Get 3D colour histogram (8 bins per channel)
+//            hc.setSize(64); // 8x8x8 降低bin的数量使用8,16,64分别计算，结果如下图所示。
+//            shist= hc.getHistogram(imageROI);
+
+//            // set histogram to be back-projected
+//
+         // Get the Hue histogram
+
+             //获取HSV彩色模式1维色调直方图,minSat不为0时设置饱和度阈值minSat
+             hc.setSize(60);
+             shist= hc.getHueHistogram(imageROI,minSat);
+             finder.setHistogram(shist);
+             finder.setThreshold(0.2f);
+
+            //Get back-projection of hue histogram计算色调直方图的反向投影
+                 int ch[1]={0};
+                 finder.setThreshold(0.2f); //
+                 backFrame= finder.find(hsvFrame,0.0f,180.0f,ch);
+
+            // Get back-projection of color histogram
+          //  backFrame= finder.find(hsvFrame);
+
+            imshow("backProject Frame",backFrame);
+
+            bitwise_and(v[1],backFrame,backFrame);
+            imshow("After And",backFrame);
+     }
+#endif
 
      gettimeofday(&tsEnd, NULL);//-----------------------测试时间
     // long runtimes;

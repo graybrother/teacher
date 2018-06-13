@@ -754,6 +754,7 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
   /* Some variables. */
   uint32_t width = model->width;
   uint32_t height = model->height;
+  uint32_t imgsize=3*width*height;
 
   uint8_t *historyImage = model->historyImage;
   uint8_t *historyBuffer = model->historyBuffer;
@@ -769,41 +770,62 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
   /* All the frame, except the border. */
   uint32_t shift, indX, indY;
   int x, y;
+  int index,index_t,index_neighbor,index_neighbor_t;
+  uint8_t r,g,b, neighbor_r,neighbor_g,neighbor_b;
+  int pos_imgsize;
+  int pos,pos_t;
 
   for (y = 1; y < height - 1; ++y) {
     shift = rand() % width;
     indX = jump[shift]; // index_jump should never be zero (> 1).
 
     while (indX < width - 1) {
-      int index = indX + y * width;
+      index = indX + y * width;
 
       if (updating_mask[index] == COLOR_BACKGROUND) {
         /* In-place substitution. */
-        uint8_t r = image_data[3 * index];
-        uint8_t g = image_data[3 * index + 1];
-        uint8_t b = image_data[3 * index + 2];
+        index_t=3* index;
+        r = image_data[index_t];
+        g = image_data[index_t + 1];
+        b = image_data[index_t + 2];
 
-        int index_neighbor = 3 * (index + neighbor[shift]);
+        index_neighbor = index + neighbor[shift];
+        index_neighbor_t=3*index_neighbor;
+
+//added 04.09 for modified update method
+        neighbor_r = image_data[index_neighbor_t];
+        neighbor_g = image_data[index_neighbor_t+1];
+        neighbor_b = image_data[index_neighbor_t+2];
 
         if (position[shift] < NUMBER_OF_HISTORY_IMAGES) {
-          historyImage[3 * index + position[shift] * (3 * width) * height    ] = r;
-          historyImage[3 * index + position[shift] * (3 * width) * height + 1] = g;
-          historyImage[3 * index + position[shift] * (3 * width) * height + 2] = b;
-
-          historyImage[index_neighbor + position[shift] * (3 * width) * height    ] = r;
-          historyImage[index_neighbor + position[shift] * (3 * width) * height + 1] = g;
-          historyImage[index_neighbor + position[shift] * (3 * width) * height + 2] = b;
+            pos_imgsize=position[shift]*imgsize;
+            historyImage[index_t+pos_imgsize ] = r;
+            historyImage[index_t+pos_imgsize + 1] = g;
+            historyImage[index_t+pos_imgsize + 2] = b;
+            if(updating_mask[index_neighbor]!=COLOR_CURRENTOBJ)
+            {
+                historyImage[index_neighbor_t + pos_imgsize    ] = neighbor_r;
+                historyImage[index_neighbor_t + pos_imgsize + 1] = neighbor_g;
+                historyImage[index_neighbor_t + pos_imgsize + 2] = neighbor_b;
+            }
         }
         else {
-          int pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
+          pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
 
-          historyBuffer[(3 * index) * numberOfTests + 3 * pos    ] = r;
-          historyBuffer[(3 * index) * numberOfTests + 3 * pos + 1] = g;
-          historyBuffer[(3 * index) * numberOfTests + 3 * pos + 2] = b;
-
-          historyBuffer[index_neighbor * numberOfTests + 3 * pos    ] = r;
-          historyBuffer[index_neighbor * numberOfTests + 3 * pos + 1] = g;
-          historyBuffer[index_neighbor * numberOfTests + 3 * pos + 2] = b;
+//          historyBuffer[(3 * index) * numberOfTests + 3 * pos    ] = r;
+//          historyBuffer[(3 * index) * numberOfTests + 3 * pos + 1] = g;
+//          historyBuffer[(3 * index) * numberOfTests + 3 * pos + 2] = b;
+          pos_t=index_t*numberOfTests+3*pos;
+          historyBuffer[pos_t    ] = r;
+          historyBuffer[pos_t + 1] = g;
+          historyBuffer[pos_t + 2] = b;
+          if(updating_mask[index_neighbor]!=COLOR_CURRENTOBJ)
+          {
+              pos_t=index_neighbor_t*numberOfTests+3*pos;
+              historyBuffer[pos_t    ] = neighbor_r;
+              historyBuffer[pos_t + 1] = neighbor_g;
+              historyBuffer[pos_t + 2] = neighbor_b;
+          }
         }
       }
 
@@ -818,24 +840,30 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
   indX = jump[shift]; // index_jump should never be zero (> 1).
 
   while (indX <= width - 1) {
-    int index = indX + y * width;
-
-    uint8_t r = image_data[3 * index];
-    uint8_t g = image_data[3 * index + 1];
-    uint8_t b = image_data[3 * index + 2];
+    index = indX + y * width;
+    index_t=3*index;
+    r = image_data[index_t];
+    g = image_data[index_t + 1];
+    b = image_data[index_t + 2];
 
     if (updating_mask[index] == COLOR_BACKGROUND) {
+
+        index_t=3*index;
+        r = image_data[index_t];
+        g = image_data[index_t + 1];
+        b = image_data[index_t + 2];
       if (position[shift] < NUMBER_OF_HISTORY_IMAGES) {
-        historyImage[3 * index + position[shift] * (3 * width) * height    ] = r;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 1] = g;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 2] = b;
+        pos_imgsize=index_t+position[shift]*imgsize;
+        historyImage[pos_imgsize    ] = r;
+        historyImage[pos_imgsize + 1] = g;
+        historyImage[pos_imgsize + 2] = b;
       }
       else {
-        int pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
-
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos    ] = r;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 1] = g;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 2] = b;
+        pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
+        pos_t=index_t*numberOfTests+3*pos;
+        historyBuffer[pos_t    ] = r;
+        historyBuffer[pos_t + 1] = g;
+        historyBuffer[pos_t + 2] = b;
       }
     }
 
@@ -849,24 +877,30 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
   indX = jump[shift]; // index_jump should never be zero (> 1).
 
   while (indX <= width - 1) {
-    int index = indX + y * width;
-
-    uint8_t r = image_data[3 * index];
-    uint8_t g = image_data[3 * index + 1];
-    uint8_t b = image_data[3 * index + 2];
+    index = indX + y * width;
+    index_t=3*index;
+    r = image_data[index_t];
+    g = image_data[index_t + 1];
+    b = image_data[index_t + 2];
 
     if (updating_mask[index] == COLOR_BACKGROUND) {
+
+        index_t=3*index;
+        r = image_data[index_t];
+        g = image_data[index_t + 1];
+        b = image_data[index_t + 2];
       if (position[shift] < NUMBER_OF_HISTORY_IMAGES) {
-        historyImage[3 * index + position[shift] * (3 * width) * height    ] = r;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 1] = g;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 2] = b;
+        pos_imgsize=index_t+position[shift]*imgsize;
+        historyImage[ pos_imgsize   ] = r;
+        historyImage[ pos_imgsize + 1] = g;
+        historyImage[ pos_imgsize + 2] = b;
       }
       else {
-        int pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
-
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos    ] = r;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 1] = g;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 2] = b;
+        pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
+        pos_t=index_t*numberOfTests+3*pos;
+        historyBuffer[pos_t    ] = r;
+        historyBuffer[pos_t + 1] = g;
+        historyBuffer[pos_t + 2] = b;
       }
     }
 
@@ -880,23 +914,28 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
   indY = jump[shift]; // index_jump should never be zero (> 1).
 
   while (indY <= height - 1) {
-    int index = x + indY * width;
+    index = x + indY * width;
 
-    uint8_t r = image_data[3 * index];
-    uint8_t g = image_data[3 * index + 1];
-    uint8_t b = image_data[3 * index + 2];
+
 
     if (updating_mask[index] == COLOR_BACKGROUND) {
+        index_t=3*index;
+        r = image_data[index_t];
+        g = image_data[index_t + 1];
+        b = image_data[index_t + 2];
       if (position[shift] < NUMBER_OF_HISTORY_IMAGES) {
-        historyImage[3 * index + position[shift] * (3 * width) * height    ] = r;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 1] = g;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 2] = b;
+
+          pos_imgsize=index_t+position[shift]*imgsize;
+          historyImage[ pos_imgsize   ] = r;
+          historyImage[ pos_imgsize + 1] = g;
+          historyImage[ pos_imgsize + 2] = b;
       }
       else {
-        int pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos    ] = r;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 1] = g;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 2] = b;
+        pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
+        pos_t=index_t*numberOfTests+3*pos;
+        historyBuffer[pos_t    ] = r;
+        historyBuffer[pos_t + 1] = g;
+        historyBuffer[pos_t + 2] = b;
       }
     }
 
@@ -910,24 +949,27 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
   indY = jump[shift]; // index_jump should never be zero (> 1).
 
   while (indY <= height - 1) {
-    int index = x + indY * width;
+    index = x + indY * width;
 
-    uint8_t r = image_data[3 * index];
-    uint8_t g = image_data[3 * index + 1];
-    uint8_t b = image_data[3 * index + 2];
+
 
     if (updating_mask[index] == COLOR_BACKGROUND) {
+        index_t=3*index;
+        uint8_t r = image_data[index_t];
+        uint8_t g = image_data[index_t + 1];
+        uint8_t b = image_data[index_t + 2];
       if (position[shift] < NUMBER_OF_HISTORY_IMAGES) {
-        historyImage[3 * index + position[shift] * (3 * width) * height    ] = r;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 1] = g;
-        historyImage[3 * index + position[shift] * (3 * width) * height + 2] = b;
+          pos_imgsize=index_t+position[shift]*imgsize;
+          historyImage[ pos_imgsize   ] = r;
+          historyImage[ pos_imgsize + 1] = g;
+          historyImage[ pos_imgsize + 2] = b;
       }
       else {
-        int pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
-
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos    ] = r;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 1] = g;
-        historyBuffer[(3 * index) * numberOfTests + 3 * pos + 2] = b;
+        pos = position[shift] - NUMBER_OF_HISTORY_IMAGES;
+        pos_t=index_t*numberOfTests+3*pos;
+        historyBuffer[pos_t    ] = r;
+        historyBuffer[pos_t + 1] = g;
+        historyBuffer[pos_t + 2] = b;
       }
     }
 
@@ -937,20 +979,21 @@ int32_t libvibeModel_Sequential_Update_8u_C3R(
 
   /* The first pixel! */
   if (rand() % model->updateFactor == 0) {
-    if (updating_mask[0] == 0) {
-      int position = rand() % model->numberOfSamples;
+    if (updating_mask[0] == COLOR_BACKGROUND) {
+      pos = rand() % model->numberOfSamples;
 
-      uint8_t r = image_data[0];
-      uint8_t g = image_data[1];
-      uint8_t b = image_data[2];
+      r = image_data[0];
+      g = image_data[1];
+      b = image_data[2];
 
-      if (position < NUMBER_OF_HISTORY_IMAGES) {
-        historyImage[position * (3 * width) * height    ] = r;
-        historyImage[position * (3 * width) * height + 1] = g;
-        historyImage[position * (3 * width) * height + 2] = b;
+      if (pos < NUMBER_OF_HISTORY_IMAGES) {
+
+        historyImage[pos * imgsize    ] = r;
+        historyImage[pos * imgsize + 1] = g;
+        historyImage[pos * imgsize + 2] = b;
       }
       else {
-        int pos = position - NUMBER_OF_HISTORY_IMAGES;
+        pos = pos - NUMBER_OF_HISTORY_IMAGES;
 
         historyBuffer[3 * pos    ] = r;
         historyBuffer[3 * pos + 1] = g;

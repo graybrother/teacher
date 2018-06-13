@@ -19,7 +19,10 @@ SOURCES += main.cpp\
 
 HEADERS  += mainwindow.h \
     objfeature.h \
-    vibe-background-sequential.h
+    vibe-background-sequential.h \
+    histogram.h \
+    colorhistogram.h \
+    contentfinder.h
 
 FORMS    += mainwindow.ui
 INCLUDEPATH += c:/opencv-contrib/include/opencv \
